@@ -2,25 +2,53 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
-	"os"
+	"sync/atomic"
 )
+
+type apiConfig struct {
+	fileserverHits atomic.Int32
+}
 
 func main() {
 
+	const filepathRoot = "."
+	const port = "8080"
+
 	mux := http.NewServeMux()
-	mux.Handle("/", http.FileServer(http.Dir(".")))
 
-	httpServer := http.Server{
+	cfg := &apiConfig{}
+
+	fileHandler := http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot)))
+	mux.Handle("/app/", cfg.middlewareMetricsInc(fileHandler))
+
+	mux.HandleFunc("/metrics", cfg.metricsHandler)
+	mux.HandleFunc("/reset", cfg.resetHandler)
+
+	httpServer := &http.Server{
 		Handler: mux,
-		Addr:    ":8080",
+		Addr:    ":" + port,
 	}
 
-	fmt.Println("Starting server on port 8080")
-	err := httpServer.ListenAndServe()
-	if err != nil {
-		fmt.Println("Error starting server:", err)
-		os.Exit(1)
-	}
+	log.Printf("Serving files from %s on port: %s\n", filepathRoot, port)
+	log.Fatal(httpServer.ListenAndServe())
 
+}
+
+func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		cfg.fileserverHits.Add(1)
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (cfg *apiConfig) metricsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	fmt.Fprintf(w, "Hits: %d", cfg.fileserverHits.Load())
+}
+
+func (cfg *apiConfig) resetHandler(w http.ResponseWriter, r *http.Request) {
+	cfg.fileserverHits.Store(0)
+	w.WriteHeader(http.StatusOK)
 }
