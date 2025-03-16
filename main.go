@@ -23,8 +23,9 @@ func main() {
 	fileHandler := http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot)))
 	mux.Handle("/app/", cfg.middlewareMetricsInc(fileHandler))
 
-	mux.HandleFunc("/metrics", cfg.metricsHandler)
-	mux.HandleFunc("/reset", cfg.resetHandler)
+	mux.HandleFunc("GET /healthz", HandlerReadiness)
+	mux.HandleFunc("GET /metrics", cfg.metricsHandler)
+	mux.HandleFunc("POST /reset", cfg.ResetHandler)
 
 	httpServer := &http.Server{
 		Handler: mux,
@@ -44,11 +45,11 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 }
 
 func (cfg *apiConfig) metricsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		// If it's not, respond with a 405 (Method Not Allowed)
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	fmt.Fprintf(w, "Hits: %d", cfg.fileserverHits.Load())
-}
-
-func (cfg *apiConfig) resetHandler(w http.ResponseWriter, r *http.Request) {
-	cfg.fileserverHits.Store(0)
-	w.WriteHeader(http.StatusOK)
 }
