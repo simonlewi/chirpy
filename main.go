@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"sync/atomic"
 )
 
@@ -23,9 +24,10 @@ func main() {
 	fileHandler := http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot)))
 	mux.Handle("/app/", cfg.middlewareMetricsInc(fileHandler))
 
-	mux.HandleFunc("GET /api/healthz", HandlerReadiness)
-	mux.HandleFunc("GET /api/metrics", cfg.metricsHandler)
-	mux.HandleFunc("POST /api/reset", cfg.ResetHandler)
+	mux.HandleFunc("/api/healthz", HandlerReadiness)
+	mux.HandleFunc("/api/validate_chirp", HandlerProfane)
+	mux.HandleFunc("/admin/metrics", cfg.metricsHandler)
+	mux.HandleFunc("/admin/reset", cfg.ResetHandler)
 
 	httpServer := &http.Server{
 		Handler: mux,
@@ -46,10 +48,16 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 
 func (cfg *apiConfig) metricsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
-		// If it's not, respond with a 405 (Method Not Allowed)
+		// If it's not GET, respond with a 405 (Method Not Allowed)
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	fmt.Fprintf(w, "Hits: %d", cfg.fileserverHits.Load())
+
+	html, err := os.ReadFile("admin.html")
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+
+	w.Header().Set("Content-Type", "text/html")
+	fmt.Fprintf(w, string(html), cfg.fileserverHits.Load())
 }
