@@ -3,7 +3,6 @@ package main
 import (
 	"chirpy/internal/database"
 	"database/sql"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -16,69 +15,59 @@ import (
 type apiConfig struct {
 	fileserverHits atomic.Int32
 	dbQueries      *database.Queries
+	platform       string
 }
 
 func main() {
-
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file", err)
-	}
-
-	dbURL := os.Getenv("DB_URL")
-
-	db, err := sql.Open("postgres", dbURL)
-	if err != nil {
-		log.Fatal("Error connecting to the database:", err)
-	}
-
 	const filepathRoot = "."
 	const port = "8080"
 
-	mux := http.NewServeMux()
-
-	cfg := &apiConfig{
-		dbQueries: database.New(db),
+	godotenv.Load()
+	dbURL := os.Getenv("DB_URL")
+	if dbURL == "" {
+		log.Fatal("PLATFORM must be set")
+	}
+	platform := os.Getenv("PLATFORM")
+	if platform == "" {
+		log.Fatal("PLATFORM must be set")
 	}
 
+	dbConn, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatal("Cannot connect to database", err)
+	}
+	defer dbConn.Close()
+
+	err = dbConn.Ping()
+	if err != nil {
+		log.Fatal("Error pinging database:", err)
+	}
+
+	cfg := &apiConfig{
+		dbQueries: database.New(dbConn),
+		platform:  platform,
+	}
+
+	mux := http.NewServeMux()
+
 	fileHandler := http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot)))
-	mux.Handle("/app/", cfg.middlewareMetricsInc(fileHandler))
+	mux.Handle("/app/", cfg.MiddlewareMetricsInc(fileHandler))
 
 	mux.HandleFunc("/api/healthz", HandlerReadiness)
 	mux.HandleFunc("/api/validate_chirp", HandlerProfane)
-	mux.HandleFunc("/admin/metrics", cfg.metricsHandler)
+	mux.HandleFunc("/api/chirps", cfg.ChirpsHandler)
+
+	mux.HandleFunc("/api/users", cfg.UsersHandler)
+
+	mux.HandleFunc("/admin/metrics", cfg.MetricsHandler)
 	mux.HandleFunc("/admin/reset", cfg.ResetHandler)
 
 	httpServer := &http.Server{
-		Handler: mux,
 		Addr:    ":" + port,
+		Handler: mux,
 	}
 
 	log.Printf("Serving files from %s on port: %s\n", filepathRoot, port)
 	log.Fatal(httpServer.ListenAndServe())
 
-}
-
-func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cfg.fileserverHits.Add(1)
-		next.ServeHTTP(w, r)
-	})
-}
-
-func (cfg *apiConfig) metricsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		// If it's not GET, respond with a 405 (Method Not Allowed)
-		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	html, err := os.ReadFile("admin.html")
-	if err != nil {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/html")
-	fmt.Fprintf(w, string(html), cfg.fileserverHits.Load())
 }

@@ -7,3 +7,6 @@ VALUES (
     $1 -- email parameter provided by the application
 )
 RETURNING *;
+
+-- name: GetUsers :many
+SELECT * FROM users;
