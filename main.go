@@ -56,6 +56,7 @@ func main() {
 	mux.HandleFunc("/api/healthz", HandlerReadiness)
 	mux.HandleFunc("/api/validate_chirp", HandlerProfane)
 	mux.HandleFunc("/api/chirps", cfg.ChirpsHandler)
+	mux.HandleFunc("/api/chirps/{chirpID}", cfg.GetChirpID)
 
 	mux.HandleFunc("/api/users", cfg.UsersHandler)
 

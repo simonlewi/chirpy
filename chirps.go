@@ -3,6 +3,7 @@ package main
 import (
 	"chirpy/internal/database"
 	"encoding/json"
+	"log"
 	"net/http"
 	"time"
 
@@ -17,12 +18,7 @@ type Chirp struct {
 	UserID    uuid.UUID `json:"user_id"`
 }
 
-func (cfg *apiConfig) ChirpsHandler(w http.ResponseWriter, r *http.Request) {
-	// Only handle POST requests
-	if r.Method != http.MethodPost {
-		RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
-		return
-	}
+func (cfg *apiConfig) CreateChirp(w http.ResponseWriter, r *http.Request) {
 
 	type parameters struct {
 		Body   string    `json:"body"`
@@ -66,4 +62,76 @@ func (cfg *apiConfig) ChirpsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	RespondWithJSON(w, http.StatusCreated, responseChirp)
+}
+
+func (cfg *apiConfig) GetChirps(w http.ResponseWriter, r *http.Request) {
+	// Call the SQLC-generated funtion to get ALL users
+	dbUsers, err := cfg.dbQueries.GetChirps(r.Context())
+	if err != nil {
+		log.Printf("Error getting chirps: %v", err)
+		http.Error(w, "Couldn't get chirps", http.StatusInternalServerError)
+		return
+	}
+
+	chirps := []Chirp{}
+	for _, dbChirp := range dbUsers {
+		chirps = append(chirps, Chirp{
+			ID:        dbChirp.ID,
+			CreatedAt: dbChirp.CreatedAt,
+			UpdatedAt: dbChirp.UpdatedAt,
+			Body:      dbChirp.Body,
+			UserID:    dbChirp.UserID,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	err = json.NewEncoder(w).Encode(chirps)
+	if err != nil {
+		log.Printf("Error encoding response: %v", err)
+		http.Error(w, "Couldn't encode response", http.StatusInternalServerError)
+	}
+}
+
+func (cfg *apiConfig) GetChirpID(w http.ResponseWriter, r *http.Request) {
+	chirpIDStr := r.PathValue("chirpID")
+
+	chirpID, err := uuid.Parse(chirpIDStr)
+	if err != nil {
+		RespondWithError(w, http.StatusBadRequest, "Invalid chirp ID", err)
+		return
+	}
+
+	dbChirp, err := cfg.dbQueries.GetChirpByID(r.Context(), chirpID)
+	if err != nil {
+		if err.Error() == "sql: no rows in result set" {
+			RespondWithError(w, http.StatusNotFound, "Chirp not found", nil)
+			return
+		}
+		RespondWithError(w, http.StatusInternalServerError, "Couldn't get chirp", err)
+		return
+	}
+
+	responseChirp := Chirp{
+		ID:        dbChirp.ID,
+		CreatedAt: dbChirp.CreatedAt,
+		UpdatedAt: dbChirp.UpdatedAt,
+		Body:      dbChirp.Body,
+		UserID:    dbChirp.UserID,
+	}
+
+	RespondWithJSON(w, http.StatusOK, responseChirp)
+}
+
+func (cfg *apiConfig) ChirpsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		cfg.GetChirps(w, r)
+		return
+	} else if r.Method == http.MethodPost {
+		cfg.CreateChirp(w, r)
+		return
+	} else {
+		RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
+		return
+	}
 }
