@@ -59,6 +59,7 @@ func main() {
 	mux.HandleFunc("/api/chirps/{chirpID}", cfg.GetChirpID)
 
 	mux.HandleFunc("/api/users", cfg.UsersHandler)
+	mux.HandleFunc("/api/login", cfg.LoginHandler)
 
 	mux.HandleFunc("/admin/metrics", cfg.MetricsHandler)
 	mux.HandleFunc("/admin/reset", cfg.ResetHandler)

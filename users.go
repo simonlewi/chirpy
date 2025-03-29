@@ -1,6 +1,8 @@
 package main
 
 import (
+	"chirpy/internal/auth"
+	"chirpy/internal/database"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -19,7 +21,8 @@ type User struct {
 
 func (cfg *apiConfig) createUser(w http.ResponseWriter, r *http.Request) {
 	type createUserRequest struct {
-		Email string `json:"email"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 
 	var params createUserRequest
@@ -32,15 +35,28 @@ func (cfg *apiConfig) createUser(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("Attempting to create user with email: %s", params.Email)
 
+	// Has the password before storing
+	hashedPassword, err := auth.HashPassword(params.Password)
+	if err != nil {
+		log.Printf("Error hashing password: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	createUserParams := database.CreateUserParams{
+		Email:   params.Email,
+		Column2: hashedPassword, // Store the hashed password
+	}
+
 	// Call the SQLC-generated function to create a user
-	dbUser, err := cfg.dbQueries.CreateUser(r.Context(), params.Email)
+	dbUser, err := cfg.dbQueries.CreateUser(r.Context(), createUserParams)
 	if err != nil {
 		log.Printf("Error creating user: %v", err)
 		http.Error(w, fmt.Sprintf("Couldn't create user: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	// Convert database.User to your API User
+	// Convert database.User to your API User (without password)
 	responseUser := User{
 		ID:        dbUser.ID,
 		CreatedAt: dbUser.CreatedAt,
