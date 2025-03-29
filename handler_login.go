@@ -5,11 +5,18 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"time"
 )
 
 type LoginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email            string `json:"email"`
+	Password         string `json:"password"`
+	ExpiresInSeconds int    `json:"expires_in_seconds,omitempty"`
+}
+
+type LoginResponse struct {
+	User  User   `json:"user"`
+	Token string `json:"token"`
 }
 
 func (cfg *apiConfig) LoginHandler(w http.ResponseWriter, r *http.Request) {
@@ -42,17 +49,42 @@ func (cfg *apiConfig) LoginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create response without password
-	responseUser := User{
-		ID:        dbUser.ID,
-		CreatedAt: dbUser.CreatedAt,
-		UpdatedAt: dbUser.UpdatedAt,
-		Email:     dbUser.Email,
+	// Determine token expiration time
+	const maxExpirationTime = 60 * 60 // 1 hour in seconds
+	expirationTime := maxExpirationTime
+	if params.ExpiresInSeconds > 0 {
+		if params.ExpiresInSeconds > maxExpirationTime {
+			expirationTime = maxExpirationTime
+		} else {
+			expirationTime = params.ExpiresInSeconds
+		}
+	}
+
+	// Create JWT token
+	token, err := auth.MakeJWT(
+		dbUser.ID,
+		cfg.secret,
+		time.Duration(expirationTime)*time.Second,
+	)
+	if err != nil {
+		http.Error(w, "Error creating token", http.StatusInternalServerError)
+		return
+	}
+
+	// Create response
+	response := LoginResponse{
+		User: User{
+			ID:        dbUser.ID,
+			CreatedAt: dbUser.CreatedAt,
+			UpdatedAt: dbUser.UpdatedAt,
+			Email:     dbUser.Email,
+		},
+		Token: token,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(responseUser); err != nil {
+	if err := json.NewEncoder(w).Encode(response); err != nil {
 		http.Error(w, "Couldn't encode response", http.StatusInternalServerError)
 		return
 	}

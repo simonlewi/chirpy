@@ -12,6 +12,7 @@ func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (str
 	if tokenSecret == "" {
 		return "", fmt.Errorf("token secret cannot be empty")
 	}
+
 	now := time.Now().UTC()
 
 	claims := jwt.RegisteredClaims{
@@ -20,7 +21,7 @@ func MakeJWT(userID uuid.UUID, tokenSecret string, expiresIn time.Duration) (str
 		ExpiresAt: jwt.NewNumericDate(now.Add(expiresIn)),
 		Subject:   userID.String(),
 	}
-
+	// Create token
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signedToken, err := token.SignedString([]byte(tokenSecret))
 	if err != nil {

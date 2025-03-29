@@ -1,6 +1,7 @@
 package main
 
 import (
+	"chirpy/internal/auth"
 	"chirpy/internal/database"
 	"encoding/json"
 	"log"
@@ -19,15 +20,26 @@ type Chirp struct {
 }
 
 func (cfg *apiConfig) CreateChirp(w http.ResponseWriter, r *http.Request) {
+	// Get the bearer token from the Authorization header
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		RespondWithError(w, http.StatusUnauthorized, "Missing or invalid token", err)
+		return
+	}
+
+	userID, err := auth.ValidateJWT(token, cfg.secret)
+	if err != nil {
+		RespondWithError(w, http.StatusUnauthorized, "Invalid token", err)
+		return
+	}
 
 	type parameters struct {
-		Body   string    `json:"body"`
-		UserID uuid.UUID `json:"user_id"`
+		Body string `json:"body"`
 	}
 
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
-	err := decoder.Decode(&params)
+	err = decoder.Decode(&params)
 	if err != nil {
 		RespondWithError(w, http.StatusBadRequest, "Invalid request payload", err)
 		return
@@ -42,10 +54,10 @@ func (cfg *apiConfig) CreateChirp(w http.ResponseWriter, r *http.Request) {
 	// Clean the text using profanity filter
 	cleanedBody := ProfaneFlag(params.Body)
 
-	// Create a new chirp
+	// Create a new chirp using userID from JWT
 	dbChirp, err := cfg.dbQueries.CreateChirp(r.Context(), database.CreateChirpParams{
 		Body:   cleanedBody,
-		UserID: params.UserID,
+		UserID: userID,
 	})
 	if err != nil {
 		RespondWithError(w, http.StatusInternalServerError, "Couldn't create chirp", err)
