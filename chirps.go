@@ -106,44 +106,41 @@ func (cfg *apiConfig) GetChirps(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) GetChirpID(w http.ResponseWriter, r *http.Request) {
-	chirpIDStr := r.PathValue("chirpID")
+	switch r.Method {
+	case http.MethodGet:
 
-	chirpID, err := uuid.Parse(chirpIDStr)
-	if err != nil {
-		RespondWithError(w, http.StatusBadRequest, "Invalid chirp ID", err)
-		return
-	}
+		chirpIDStr := r.PathValue("chirpID")
 
-	dbChirp, err := cfg.dbQueries.GetChirpByID(r.Context(), chirpID)
-	if err != nil {
-		if err.Error() == "sql: no rows in result set" {
-			RespondWithError(w, http.StatusNotFound, "Chirp not found", nil)
+		chirpID, err := uuid.Parse(chirpIDStr)
+		if err != nil {
+			RespondWithError(w, http.StatusBadRequest, "Invalid chirp ID", err)
 			return
 		}
-		RespondWithError(w, http.StatusInternalServerError, "Couldn't get chirp", err)
-		return
-	}
 
-	responseChirp := Chirp{
-		ID:        dbChirp.ID,
-		CreatedAt: dbChirp.CreatedAt,
-		UpdatedAt: dbChirp.UpdatedAt,
-		Body:      dbChirp.Body,
-		UserID:    dbChirp.UserID,
-	}
+		dbChirp, err := cfg.dbQueries.GetChirpByID(r.Context(), chirpID)
+		if err != nil {
+			if err.Error() == "sql: no rows in result set" {
+				RespondWithError(w, http.StatusNotFound, "Chirp not found", nil)
+				return
+			}
+			RespondWithError(w, http.StatusInternalServerError, "Couldn't get chirp", err)
+			return
+		}
 
-	RespondWithJSON(w, http.StatusOK, responseChirp)
-}
+		responseChirp := Chirp{
+			ID:        dbChirp.ID,
+			CreatedAt: dbChirp.CreatedAt,
+			UpdatedAt: dbChirp.UpdatedAt,
+			Body:      dbChirp.Body,
+			UserID:    dbChirp.UserID,
+		}
 
-func (cfg *apiConfig) ChirpsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		cfg.GetChirps(w, r)
-		return
-	} else if r.Method == http.MethodPost {
-		cfg.CreateChirp(w, r)
-		return
-	} else {
-		RespondWithError(w, http.StatusMethodNotAllowed, "Method not allowed", nil)
-		return
+		RespondWithJSON(w, http.StatusOK, responseChirp)
+
+	case http.MethodDelete:
+		cfg.DeleteChirpHandler(w, r)
+
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }

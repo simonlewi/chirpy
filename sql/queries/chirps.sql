@@ -14,3 +14,7 @@ SELECT * FROM chirps ORDER BY created_at ASC;
 
 -- name: GetChirpByID :one
 SELECT * FROM chirps WHERE id = $1; -- id parameter provided by the application
+
+-- name: DeleteChirp :exec
+DELETE FROM chirps
+WHERE id = $1 AND user_id = $2;
