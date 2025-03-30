@@ -101,15 +101,3 @@ func (cfg *apiConfig) getUsers(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Couldn't encode response", http.StatusInternalServerError)
 	}
 }
-
-func (cfg *apiConfig) UsersHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodPost {
-		cfg.createUser(w, r)
-		return
-	}
-	if r.Method == http.MethodGet {
-		cfg.getUsers(w, r)
-		return
-	}
-	http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-}
