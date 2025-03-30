@@ -1,6 +1,7 @@
 package main
 
 import (
+	"chirpy/internal/auth"
 	"chirpy/internal/database"
 	"database/sql"
 	"log"
@@ -16,7 +17,8 @@ type apiConfig struct {
 	fileserverHits atomic.Int32
 	dbQueries      *database.Queries
 	platform       string
-	secret         string
+	tokenSecret    string
+	tokenService   *auth.TokenService
 }
 
 func main() {
@@ -49,9 +51,10 @@ func main() {
 	}
 
 	cfg := &apiConfig{
-		dbQueries: database.New(dbConn),
-		platform:  platform,
-		secret:    jwtSecret,
+		dbQueries:    database.New(dbConn),
+		platform:     platform,
+		tokenSecret:  jwtSecret,
+		tokenService: auth.NewTokenService(database.New(dbConn), jwtSecret),
 	}
 
 	mux := http.NewServeMux()
@@ -66,6 +69,8 @@ func main() {
 
 	mux.HandleFunc("/api/users", cfg.UsersHandler)
 	mux.HandleFunc("/api/login", cfg.LoginHandler)
+	mux.HandleFunc("/api/refresh", cfg.RefreshHandler)
+	mux.HandleFunc("/api/revoke", cfg.RevokeHandler)
 
 	mux.HandleFunc("/admin/metrics", cfg.MetricsHandler)
 	mux.HandleFunc("/admin/reset", cfg.ResetHandler)

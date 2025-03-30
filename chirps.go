@@ -27,7 +27,7 @@ func (cfg *apiConfig) CreateChirp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := auth.ValidateJWT(token, cfg.secret)
+	userID, err := auth.ValidateJWT(token, cfg.tokenSecret)
 	if err != nil {
 		RespondWithError(w, http.StatusUnauthorized, "Invalid token", err)
 		return
