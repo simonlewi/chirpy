@@ -7,6 +7,7 @@ package database
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/google/uuid"
 )
@@ -18,7 +19,7 @@ SET
     hashed_password = $2,
     updated_at = NOW()
 WHERE id = $3::uuid
-RETURNING id, email
+RETURNING id, email, is_chirpy_red
 `
 
 type UpdateUserParams struct {
@@ -28,13 +29,14 @@ type UpdateUserParams struct {
 }
 
 type UpdateUserRow struct {
-	ID    uuid.UUID
-	Email string
+	ID          uuid.UUID
+	Email       string
+	IsChirpyRed sql.NullBool
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateUserRow, error) {
 	row := q.db.QueryRowContext(ctx, updateUser, arg.Email, arg.HashedPassword, arg.Column3)
 	var i UpdateUserRow
-	err := row.Scan(&i.ID, &i.Email)
+	err := row.Scan(&i.ID, &i.Email, &i.IsChirpyRed)
 	return i, err
 }

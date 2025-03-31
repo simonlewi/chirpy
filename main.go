@@ -19,6 +19,7 @@ type apiConfig struct {
 	platform       string
 	tokenSecret    string
 	tokenService   *auth.TokenService
+	apiKey         string
 }
 
 func main() {
@@ -38,6 +39,10 @@ func main() {
 	if jwtSecret == "" {
 		log.Fatal("JWT_SECRET must be set")
 	}
+	polkaKey := os.Getenv("POLKA_KEY")
+	if polkaKey == "" {
+		log.Fatal("POLKA_KEY must be set")
+	}
 
 	dbConn, err := sql.Open("postgres", dbURL)
 	if err != nil {
@@ -55,6 +60,7 @@ func main() {
 		platform:     platform,
 		tokenSecret:  jwtSecret,
 		tokenService: auth.NewTokenService(database.New(dbConn), jwtSecret),
+		apiKey:       polkaKey,
 	}
 
 	mux := http.NewServeMux()
@@ -71,6 +77,8 @@ func main() {
 	mux.HandleFunc("/api/login", cfg.LoginHandler)
 	mux.HandleFunc("/api/refresh", cfg.RefreshHandler)
 	mux.HandleFunc("/api/revoke", cfg.RevokeHandler)
+
+	mux.HandleFunc("/api/polka/webhooks", cfg.HandlerWebhooks)
 
 	mux.HandleFunc("/admin/metrics", cfg.MetricsHandler)
 	mux.HandleFunc("/admin/reset", cfg.ResetHandler)

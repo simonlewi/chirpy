@@ -16,8 +16,9 @@ type UpdateUserRequest struct {
 }
 
 type UserResponse struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
+	ID          string `json:"id"`
+	Email       string `json:"email"`
+	IsChirpyRed bool   `json:"is_chirpy_red"`
 }
 
 func (cfg *apiConfig) UpdateUserHandler(w http.ResponseWriter, r *http.Request) {
@@ -64,8 +65,9 @@ func (cfg *apiConfig) UpdateUserHandler(w http.ResponseWriter, r *http.Request) 
 
 	// Prepare response
 	response := UserResponse{
-		ID:    updatedUser.ID.String(),
-		Email: updatedUser.Email,
+		ID:          updatedUser.ID.String(),
+		Email:       updatedUser.Email,
+		IsChirpyRed: updatedUser.IsChirpyRed.Bool,
 	}
 
 	// Send response

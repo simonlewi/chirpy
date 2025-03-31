@@ -18,6 +18,7 @@ type LoginRequest struct {
 type LoginResponse struct {
 	ID           uuid.UUID `json:"id"`
 	Email        string    `json:"email"`
+	IsChirpyRed  bool      `json:"is_chirpy_red"`
 	Token        string    `json:"token"`
 	RefreshToken string    `json:"refresh_token"`
 }
@@ -63,6 +64,7 @@ func (cfg *apiConfig) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	response := LoginResponse{
 		ID:           dbUser.ID,
 		Email:        dbUser.Email,
+		IsChirpyRed:  dbUser.IsChirpyRed.Bool,
 		Token:        accessToken,
 		RefreshToken: refreshToken,
 	}
