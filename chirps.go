@@ -4,13 +4,14 @@ import (
 	"chirpy/internal/auth"
 	"chirpy/internal/database"
 	"encoding/json"
-	"log"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
 )
 
+// Chirp represents a message in the system
 type Chirp struct {
 	ID        uuid.UUID `json:"id"`
 	CreatedAt time.Time `json:"created_at"`
@@ -77,16 +78,44 @@ func (cfg *apiConfig) CreateChirp(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) GetChirps(w http.ResponseWriter, r *http.Request) {
-	// Call the SQLC-generated funtion to get ALL users
-	dbUsers, err := cfg.dbQueries.GetChirps(r.Context())
+	// Get the author_id from query parameters
+	authorIDStr := r.URL.Query().Get("author_id")
+	sortOrder := r.URL.Query().Get("sort")
+	if sortOrder == "" {
+		sortOrder = "asc"
+	}
+
+	var dbChirps []database.Chirp
+	var err error
+
+	if authorIDStr != "" {
+		// Parse and validate the UUID
+		var authorID uuid.UUID
+		authorID, err = uuid.Parse(authorIDStr)
+		if err != nil {
+			RespondWithError(w, http.StatusBadRequest, "Invalid author ID", err)
+			return
+		}
+
+		// Get chirps filtered by author
+		dbChirps, err = cfg.dbQueries.GetChirpsByAuthor(r.Context(), authorID)
+	} else {
+		// Get all chirps if no author filter
+		dbChirps, err = cfg.dbQueries.GetChirps(r.Context())
+	}
+
 	if err != nil {
-		log.Printf("Error getting chirps: %v", err)
-		http.Error(w, "Couldn't get chirps", http.StatusInternalServerError)
+		RespondWithError(w, http.StatusInternalServerError, "Couldn't get chirps", err)
 		return
 	}
 
-	chirps := []Chirp{}
-	for _, dbChirp := range dbUsers {
+	// Convert database chirps to response format
+	chirps := make([]Chirp, 0, len(dbChirps))
+	for _, dbChirp := range dbChirps {
+		if dbChirp.ID == uuid.Nil || dbChirp.Body == "" {
+			continue
+		}
+
 		chirps = append(chirps, Chirp{
 			ID:        dbChirp.ID,
 			CreatedAt: dbChirp.CreatedAt,
@@ -96,13 +125,14 @@ func (cfg *apiConfig) GetChirps(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	err = json.NewEncoder(w).Encode(chirps)
-	if err != nil {
-		log.Printf("Error encoding response: %v", err)
-		http.Error(w, "Couldn't encode response", http.StatusInternalServerError)
-	}
+	sort.Slice(chirps, func(i, j int) bool {
+		if sortOrder == "desc" {
+			return chirps[i].CreatedAt.After(chirps[j].CreatedAt)
+		}
+		return chirps[i].CreatedAt.Before(chirps[j].CreatedAt)
+	})
+
+	RespondWithJSON(w, http.StatusOK, chirps)
 }
 
 func (cfg *apiConfig) GetChirpID(w http.ResponseWriter, r *http.Request) {
